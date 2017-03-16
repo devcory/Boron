@@ -1,0 +1,239 @@
+<link rel="import" href="../polymer/polymer.html"/>
+<link rel="import" href="boron-table-cell.html"/>
+<link rel="import" href="boron-table-column.html"/>
+<link rel="import" href="../iron-icons/iron-icons.html"/>
+<link rel="import" href="../iron-icon/iron-icon.html"/>
+<link rel="import" href="../paper-checkbox/paper-checkbox.html"/>
+<link rel="import" href="../paper-material/paper-material.html"/>
+<link rel="import" href="../paper-progress/paper-progress.html" />
+<!--
+`<boron-table>` provides a simple responsive table. Use the special children element 
+`<main>` to layout a content section above the table. Use the `<columns>` element to 
+provide a definition for each one of the columns. Use `<multi>` to make an actions 
+section for bulk operations. 
+Example:
+    <boron-table multi-selection heading="Family" items="{{items}}">
+       <columns>
+          <boron-column heading="Name"><template>{{item.lastName}}, {{item.firstName}}</template></boron-column>
+          <boron-column heading="Age" style="text-align:center;"><template>{{item.age}}</template></boron-column>
+          <boron-column heading="Favorite Food"><template><a href="http://google.com">{{item.food}}</a></template></boron-column>
+       </columns>
+       <empty>No family members were found.</empty>
+        <multi>
+            <iron-icon icon="delete" title="delete"></iron-icon>
+            <iron-icon icon="archive" title="archive"></iron-icon>
+        </multi>
+        <main>This is a content area for text above the table. Let's see' how this goes.</main>
+        <actions>
+            <iron-icon icon="add" title="add"></iron-icon>
+            <boron-menu-button title="more">
+                <paper-item>Export</paper-item>
+                <paper-item>Import</paper-item>
+                <paper-item>Help</paper-item>
+            </boron-menu-button>
+        </actions>
+    </boron-table>
+	
+@group boron Elements
+@element boron-layout
+-->
+<dom-module id="boron-table">
+    <template>
+        <!-- TODO: carrot on sorted -->
+        <!-- TODO: loading state -->
+        <!-- TODO: hide columns on mobile -->
+        <style is="custom-style">
+            .colcheck { max-width:30px }
+            .row { padding:16px; display:flex; border-top:solid 1px gainsboro; }
+            .cell:hover { background-color:whitesmoke }
+            .row > * { flex:1 1 auto; width:1px; word-break:break-all; height:1.2em; overflow:hidden; }
+            .colhead { color:darkgrey; border-top:none; }
+            paper-material { background-color:white; }
+            .footer { align-items:center; color:gainsboro; padding:16px; display:flex; border-top: solid 1px gainsboro }
+            .footer > iron-icon { margin-left: 16px; cursor:pointer }
+            #heading { display:flex; align-items:center; height:64px; padding:0px 16px 0px 16px; }
+            #headingtext { @apply(--paper-card-header-text); }
+            #main ::content > main, #empty { padding:16px; }
+            #multioverlay { z-index:100; color:white; position:absolute; right:0px; left:0px; background-color:var(--primary-color); display:flex; height:64px; align-items:center; padding:0px 16px 0px 16px;  }
+            .actions ::content > * > * { padding: 0px 0px 0px 8px; cursor:pointer; }
+            paper-progress {--paper-progress-indeterminate-cycle-duration: 0.90s; --paper-progress-active-color: var(--primary-color);}
+            div[sort] { cursor:pointer }
+            @media (max-width: 600px) {
+                .boronnomobile { display: none; }
+            }
+        </style>
+        <paper-material>
+            <template is="dom-if" if="{{heading}}">
+                <div id="multioverlay" hidden$="{{!_multiSelected}}">
+                    <div>{{_itemCountText(selectedItems.*)}}</div>
+                    <div style="flex:1 1 auto"></div>
+                    <div class="actions" id="multiactions"><content select="multi"></content></div>
+                </div>
+                <div id="heading">
+                    <div id="headingtext">{{heading}}</div>
+                    <div style="flex:1 1 auto;"></div>
+                    <div class="actions" id="actions"><content select="actions"></content></div>
+                </div>
+            </template>
+            <div id="main"><content select="main"></content></div>
+            <div id="empty" hidden><content select="empty"></content></div>
+            <div id="loading" hidden$="{{!_loadingItem}}"><paper-progress style="width:100%" indeterminate></paper-progress></div>
+            <template is="dom-if" if="{{_hasItems}}">
+                <div class="row colhead">
+                    <div class="colcheck" hidden$="{{!multiSelection}}">
+                        <paper-checkbox checked="{{allSelected}}" on-change="_selectAllClick" title="Select All"></paper-checkbox>
+                    </div>
+                    <template is="dom-repeat" items="{{_columnDefs}}" as="col">
+                        <div style$="{{col.style}}" sort$="{{col.sort}}" class$="{{_colHeadClass(col.noMobile)}}" on-click="_sort">{{col.heading}}</div>
+                    </template>
+                </div>
+                <template is="dom-repeat" items="[[items]]">
+                    <div class="row cell">
+                        <div class="colcheck" hidden$="{{!multiSelection}}">
+                            <paper-checkbox checked="{{_isSelected(item,selectedItems.*)}}" on-change="_selectItem"></paper-checkbox>
+                        </div>
+                        <template is="dom-repeat" items="{{_columnDefs}}" as="col">
+                            <boron-table-cell column="{{col}}" item="{{item}}" style="{{col.style}}" class$="{{_colHeadClass(col.noMobile)}}"></boron-table-cell>
+                        </template>
+                    </div>
+                </template>
+            </template>
+            <template is="dom-if" if="{{pageInfo}}">
+                <div class="footer">
+                    <div>{{startItem}}-{{endItem}} of {{pageInfo.total}}</div>
+                    <iron-icon icon="chevron-left" on-click="_pagePrev" hidden$="{{!hasLess}}"></iron-icon>
+                    <iron-icon icon="chevron-right" on-click="_pageNext" hidden$="{{!hasMore}}"></iron-icon>
+		    <div style="flex:1 1 auto"></div>
+                </div>
+            </template>
+            <div hidden id="columns"><content select="columns"></content></div>
+        </paper-material>
+    </template>
+    <script>
+    Polymer({
+        is:"boron-table",
+        properties: {
+            /* the array of objects to display in this table */
+            items: { type:Array, notify:true },
+            /* the objects in this table which are selected */
+            selectedItems: { type:Array, notify:true, value:[] },
+            /* set the text heading for this table */
+            heading: String, 
+            /* enable checkboxes for this table */
+            multiSelection: { type:Boolean, value:false },
+            /* true when all items are selected */
+            allSelected: { type:Boolean, notify:true, value:false },
+            /* sorting column as text +column is ascending -column is descending */
+            sort: { type:String, notify:true }, 
+            /* set this to enable paging functions */
+            pageInfo: { type:Object, notify:true, observer:"_setPageInfo" },
+            /* internal column definitions */
+            _columnDefs: Array, 
+            /* internal check for items */
+            _hasItems: { type: Boolean, notify: true, value: false },
+            /* internal check for items being loaded */
+            _loadingItems: { type: Boolean, notify: true, value: false }
+        },
+        observers: [
+            "_itemsChanged(items.*)",
+            "_selectionChange(selectedItems.*)"
+        ],
+        _isSelected: function(item, splices) {
+            return this.selectedItems.indexOf(item) != -1;
+        },
+        _itemCountText: function(splices) {
+            return this.allSelected ? "all selected" : splices.base.length + " selected";
+        },
+        _selectItem: function(e) {
+            var index = this.selectedItems.indexOf(e.model.item);
+            if(e.target.checked) {
+                if(index == -1) this.push("selectedItems", e.model.item);
+            } else {
+                this.allSelected = false;
+                if(index != -1) this.splice("selectedItems", index, 1);
+            }
+            console.log(this.selectedItems);
+        },
+        _colHeadClass: function(noMobile)
+        {
+            return noMobile ? "boronnomobile" : "";
+        },
+        _selectionChange: function(value) {
+            this._multiSelected = this.selectedItems.length > 0;
+        },
+        _selectAllClick: function(e) {
+            this.allSelected = e.target.checked;
+            if(this.allSelected) {
+                for(var i = 0; i < this.items.length; i++) {
+                    var index = this.selectedItems.indexOf(this.items[i]);
+                    if(index == -1) this.push("selectedItems", this.items[i]);
+                }
+            } else {
+                this.set("selectedItems", []);
+            }
+        },
+        _setPageInfo: function(pageInfo) {
+            if(pageInfo == undefined || pageInfo == null) return; 
+            this.startItem = (pageInfo.page - 1) * pageInfo.pageSize + 1; 
+            this.endItem = (this.startItem - 1) + pageInfo.pageSize; 
+            this.endItem = this.endItem > pageInfo.total ? pageInfo.total : this.endItem; 
+            this.hasLess = pageInfo.page > 1;
+            this.hasMore = pageInfo.page < (pageInfo.total / pageInfo.pageSize); 
+        },
+        _pagePrev: function() {
+            this.set("pageInfo.page", this.pageInfo.page - 1);
+        },
+        _pageNext: function() {
+            this.set("pageInfo.page", this.pageInfo.page + 1);
+        },
+        _sort: function(e) {
+            this.sort = e.model.col.sort;
+        },
+        _itemsChanged: function() {
+            var items = this.items;
+            if (items == undefined || items === null) {
+                //loading array
+                this.set("_loadingItem", true);
+                return;
+            }
+            else if (items.length == 0) {
+                //got an empty array
+                this.$.empty.hidden = false;
+                this.set("_loadingItem", false);
+            }
+            else{
+                //show items in list
+                this.$.empty.hidden = true;
+                this.set("_loadingItem", false);
+                this.set("_hasItems", true);
+            }
+            if(this._columnDefs != undefined) return this._columnDefs;
+            var cols = [];
+            var columns = Polymer.dom(this).querySelector("columns");
+            if(columns) {
+                var tags = columns.querySelectorAll("boron-table-column");
+                for (var i = 0; i < tags.length; i++) {
+                    cols.push({
+                        heading: tags[i].attributes.heading.value,
+                        style: tags[i].attributes.style == undefined ? "" : tags[i].attributes.style.value,
+                        templater: tags[i], 
+                        sort: tags[i].attributes.sort == undefined ? null : tags[i].attributes.sort.value,
+                        noMobile: tags[i].attributes["no-mobile"] == undefined ? false : true
+                    });
+                }
+            } else {
+                for (var property in items[0]) {
+                    if (!items[0].hasOwnProperty(property)) continue; 
+                    cols.push({ 
+                        heading:property,
+                        template: "{{" + property + "}}",
+                        style: ""
+                    });
+                }
+            }
+            this._columnDefs = cols;
+            return cols; 
+        }
+    });
+    </script>
+</dom-module>

@@ -1,0 +1,34 @@
+<link rel="import" href="../polymer/polymer.html"/>
+<dom-module id="boron-table-cell">
+    <template>
+        <div id="wrapper"></div>
+    </template>
+    <script>
+    Polymer({
+        is:"boron-table-cell",
+        properties: {
+            column: Object, 
+            item: Object
+        },
+        behaviors: [ 
+            Polymer.Templatizer 
+        ],
+        observers: [
+            "_render(column,item)"
+        ], 
+        _render: function(column, item) {
+            var ele; 
+            if(column.templater) {
+                ele = column.templater.getInstance({item:item})
+            } else {
+                var template = document.createElement("template");
+                template.innerHTML = column.template;
+                this.templatize(template);
+                ele = this.stamp(item);
+            }
+            Polymer.dom(this.$.wrapper).innerHTML = "";            
+            Polymer.dom(this.$.wrapper).appendChild(ele.root);
+        }
+    });
+    </script>
+</dom-module>

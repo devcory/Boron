@@ -1,0 +1,19 @@
+{
+  "name": "boron-table",
+  "authors": [
+    "Cory Long <developercory@gmail.com>"
+  ],
+  "description": "Material responsive table",
+  "main": "",
+  "license": "MIT",
+  "homepage": "",
+  "ignore": [],
+  "dependencies": {
+    "iron-icon": "polymerelements/iron-icon#^1.0.0",
+    "iron-icons": "polymerelements/iron-icons#^1.0.0",
+    "iron-list": "polymerelements/iron-list#^1.0.0",
+    "paper-checkbox": "polymerelements/paper-checkbox#^1.0.0",
+    "paper-material": "polymerelements/paper-material#^1.0.0",
+    "polymer": "Polymer/polymer#^1.1.0"
+  }
+}

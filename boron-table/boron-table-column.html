@@ -1,0 +1,22 @@
+<link rel="import" href="../polymer/polymer.html"/>
+<dom-module id="boron-table-column">
+    <script>
+    Polymer({
+        is:"boron-table-column",
+        behaviors: [ 
+            Polymer.Templatizer 
+        ],
+        properties: {
+            template: Object
+        },
+        ready: function() {
+            this.template = Polymer.dom(this).querySelector("template");
+            if(this.template == undefined) console.error("boron-table-column must have a template");
+        }, 
+        getInstance: function(item) {
+            this.templatize(this.template);
+            return this.stamp(item);
+        }
+    });
+    </script>
+</dom-module>
